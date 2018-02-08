@@ -8,6 +8,9 @@ in vec2 texture_coord_in;
 out vec3 color;
 out vec2 texture_coord;
 
+uniform float time_absolute;
+uniform float time_delta;
+
 
 void main()
 {

@@ -9,6 +9,9 @@ out vec4 color_out;
 uniform sampler2D texture_A;
 uniform sampler2D texture_B;
 
+uniform float time_absolute;
+uniform float time_delta;
+
 
 void main()
 {
@@ -19,17 +22,29 @@ void main()
             1.0 - texture_coord.y
         )
     );
+    // vec4 color_B = texture(
+    //     texture_B,
+    //     vec2(
+    //               texture_coord.x,
+    //         1.0 - texture_coord.y
+    //     )
+    // );
+    // vec2(Texcoord.x + sin(Texcoord.y * 60.0 + time * 2.0) / 30.0, 1.0 - Texcoord.y)
     vec4 color_B = texture(
         texture_B,
         vec2(
-                  texture_coord.x,
+            texture_coord.x + sin(
+                texture_coord.y * 60.0
+                + time_absolute * 2.0
+            ) / 30.0,
             1.0 - texture_coord.y
         )
     );
     color_out = mix(
         color_A,
         color_B,
-        texture_coord.x
+        // texture_coord.x
+        ( sin( time_absolute * 2.0 ) + 1.0 ) / 2.0
     );
     color_out *= vec4(
         1.0 - color.r,
