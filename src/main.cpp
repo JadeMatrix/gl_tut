@@ -100,26 +100,6 @@ int main( int argc, char* argv[] )
             }
         #endif
             
-            // GLuint test_vb;
-            // std::cout << "glGenBuffers: " << ( unsigned long )glGenBuffers << std::endl;
-            // glGenBuffers( 1, &test_vb );
-            // std::cout << "test vertex buffer: " << test_vb << std::endl;
-            
-            float triangle_vertices[] = {
-                 0.0f,  0.5f,
-                 0.5f, -0.5f,
-                -0.5f, -0.5f
-            };
-            GLuint triangle_vbo;
-            glGenBuffers( 1, &triangle_vbo );
-            glBindBuffer( GL_ARRAY_BUFFER, triangle_vbo );
-            glBufferData(
-               GL_ARRAY_BUFFER,
-               sizeof( triangle_vertices ),
-               triangle_vertices,
-               GL_STATIC_DRAW // GL_DYNAMIC_DRAW, GL_STREAM_DRAW
-            );
-            
             GLuint vertex_shader = compile_shader_from_file(
                 GL_VERTEX_SHADER,
                 "../src/vertex_shader.vert"
@@ -149,19 +129,67 @@ int main( int argc, char* argv[] )
                 glLinkProgram( shader_program );
                 glUseProgram(  shader_program );
                 
+                float triangle_vertices[] = {
+                //      X,     Y,    R,    G,    B
+                    -0.5f,  0.5f, 1.0f, 0.0f, 0.0f, //    top left
+                     0.5f,  0.5f, 0.0f, 1.0f, 0.0f, //    top right
+                     0.5f, -0.5f, 0.0f, 0.0f, 1.0f, // bottom right
+                    -0.5f, -0.5f, 1.0f, 1.0f, 1.0f  // bottom left
+                };
+                GLuint triangle_vbo;
+                glGenBuffers( 1, &triangle_vbo );
+                glBindBuffer( GL_ARRAY_BUFFER, triangle_vbo );
+                glBufferData(
+                   GL_ARRAY_BUFFER,
+                   sizeof( triangle_vertices ),
+                   triangle_vertices,
+                   GL_STATIC_DRAW // GL_DYNAMIC_DRAW, GL_STREAM_DRAW
+                );
+                
+                GLuint triangle_elements[] = {
+                    0, 1, 2,
+                    2, 3, 0
+                };
+                GLuint triangle_ebo;
+                glGenBuffers( 1, &triangle_ebo );
+                glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, triangle_ebo );
+                glBufferData(
+                    GL_ELEMENT_ARRAY_BUFFER,
+                    sizeof( triangle_elements ),
+                    triangle_elements,
+                    GL_STATIC_DRAW
+                );
+                
                 GLint position_attr = glGetAttribLocation(
                     shader_program,
                     "position"
                 );
-                glVertexAttribPointer(
-                    position_attr,  // Data source
-                    2,              // Components per element
-                    GL_FLOAT,       // Component type
-                    GL_FALSE,       // Components should be normalized
-                    0,              // Component stride in bytes (0 = packed)
-                    0               // Component offset within stride
-                );
                 glEnableVertexAttribArray( position_attr );
+                glVertexAttribPointer(
+                    position_attr,       // Data source
+                    2,                   // Components per element
+                    GL_FLOAT,            // Component type
+                    GL_FALSE,            // Components should be normalized
+                    5 * sizeof( float ), // Component stride in bytes (0 = packed)
+                    NULL                 // Component offset within stride
+                );
+                
+                GLint color_attr = glGetAttribLocation(
+                    shader_program,
+                    "color_in"
+                );
+                glEnableVertexAttribArray( color_attr );
+                glVertexAttribPointer(
+                    color_attr,          // Data source
+                    3,                   // Components per element
+                    GL_FLOAT,            // Component type
+                    GL_FALSE,            // Components should be normalized
+                    5 * sizeof( float ), // Component stride in bytes (0 = packed)
+                    ( void* )( 2 * sizeof( float ) )
+                                         // Component offset within stride
+                );
+                
+                glClearColor( 0.0f, 0.0f, 0.0f, 0.0f );
                 
                 SDL_Event window_event;
                 while( true )
@@ -171,36 +199,53 @@ int main( int argc, char* argv[] )
                         if( window_event.type == SDL_QUIT )
                             break;
                         else if(
-                            SDL_GetWindowFlags( sdl_window ) & (
+                            window_event.type == SDL_KEYUP
+                            && window_event.key.keysym.sym == SDLK_ESCAPE
+                            && SDL_GetWindowFlags( sdl_window ) & (
                                   SDL_WINDOW_FULLSCREEN
                                 | SDL_WINDOW_FULLSCREEN_DESKTOP
                             )
-                            && window_event.type == SDL_KEYUP
-                            && window_event.key.keysym.sym == SDLK_ESCAPE
                         )
                             break;
                     }
                     
                     // Update //////////////////////////////////////////////////
                     {
+                        glClear(
+                              GL_COLOR_BUFFER_BIT
+                            | GL_DEPTH_BUFFER_BIT
+                            | GL_STENCIL_BUFFER_BIT
+                        );
+                        
                         glUseProgram( shader_program );
                         glBindVertexArray( program_vao );
                         
-                        GLuint triangle_color = glGetUniformLocation(
-                            shader_program,
-                            "triangle_color"
-                        );
-                        glUniform3f( triangle_color, 0.0f, 1.0f, 0.0f );
+                        // GLuint triangle_color = glGetUniformLocation(
+                        //     shader_program,
+                        //     "triangle_color"
+                        // );
+                        // glUniform3f( triangle_color, 0.0f, 1.0f, 0.0f );
                         
-                        glDrawArrays(
-                            GL_TRIANGLES,   // Type of primitive
-                            0,              // Start primitive
-                            3               // Number of primitives
+                        // glDrawArrays(
+                        //     GL_TRIANGLES,   // Type of primitive
+                        //     0,              // Start primitive
+                        //     3               // Number of primitives
+                        // );
+                        glDrawElements(
+                            GL_TRIANGLES,       // Type of primitive
+                            6,                  // Number of elements
+                            GL_UNSIGNED_INT,    // Type of element
+                            0                   // Starting at element
                         );
                     }
                     
                     SDL_GL_SwapWindow( sdl_window );
                 }
+                
+                glDeleteProgram( shader_program );
+                
+                glDeleteBuffers( 1, &triangle_vbo );
+                glDeleteBuffers( 1, &triangle_ebo );
             }
             else
             {

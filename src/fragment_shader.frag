@@ -1,11 +1,18 @@
 #version 150 core
 
 
-uniform vec3 triangle_color;
-out vec4 out_color;
+in vec3 color;
+
+out vec4 color_out;
 
 
 void main()
 {
-    out_color = vec4( triangle_color, 1.0 );
+    // color_out = vec4( color, 1.0 );
+    color_out = vec4(
+        1.0 - color.r,
+        1.0 - color.g,
+        1.0 - color.b,
+        1.0
+    );
 }
