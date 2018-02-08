@@ -303,6 +303,25 @@ namespace gl_tut
             );
     }
     
+    template<> void GL_shader_program::set_uniform< glm::mat4 >(
+        const std::string& uniform_name,
+        const glm::mat4& value
+    )
+    {
+        auto uniform_id = uniform( uniform_name );
+        glUniformMatrix4fv(
+            uniform_id,
+            1,          // Number of matrices
+            GL_FALSE,   // Transpose matrix before use
+            glm::value_ptr( value )
+        );
+        if( glGetError() != GL_NO_ERROR )
+            throw wrong_variable_type(
+                "unable to set matrix4 uniform of program "
+                + std::to_string( id )
+            );
+    }
+    
     bool load_bound_texture( std::string filename )
     {
         SDL_Surface* sdl_surface = IMG_Load(
@@ -345,24 +364,24 @@ namespace gl_tut
         );
         SDL_FreeSurface( sdl_surface );
         
-        glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER );
-        glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER );
-        float texture_border_color[] = { 1.0f, 0.0f, 0.0f };
-        glTexParameterfv(
-            GL_TEXTURE_2D,
-            GL_TEXTURE_BORDER_COLOR,
-            texture_border_color
-        );
+        // glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER );
+        // glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER );
+        // float texture_border_color[] = { 1.0f, 0.0f, 0.0f };
+        // glTexParameterfv(
+        //     GL_TEXTURE_2D,
+        //     GL_TEXTURE_BORDER_COLOR,
+        //     texture_border_color
+        // );
+        
+        glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
+        glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
+        // glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+        // glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
         
         glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR );
         // glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
         glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
         glGenerateMipmap( GL_TEXTURE_2D );
-        
-        // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         
         return true;
     }
@@ -376,6 +395,8 @@ namespace
     public:
         GLuint triangle_vbo;
         GLuint triangle_ebo;
+        
+        glm::mat4 transform;
         
         tutorial_manager(
             gl_tut::GL_shader_program& shader_program,
@@ -475,14 +496,37 @@ namespace
                 ( void* )( 5 * sizeof( float ) )
                                      // Component offset within stride
             );
+            
+            
+            // Transform matrix ////////////////////////////////////////////////
+            
+            
+            transform = glm::mat4( 1.0f );
+            // transform = glm::rotate(
+            //     transform,
+            //     glm::radians( 180.0f ),
+            //     glm::vec3( 0.0f, 0.0f, 1.0f )
+            // );
         }
         
         void update(
             gl_tut::GL_shader_program& shader_program,
-            std::chrono::high_resolution_clock::duration time_absolute,
-            std::chrono::high_resolution_clock::duration time_delta
+            const std::chrono::high_resolution_clock::time_point start_time,
+            const std::chrono::high_resolution_clock::time_point current_time
         )
         {
+            transform = glm::rotate(
+                glm::mat4( 1.0f ),
+                glm::radians( std::chrono::duration_cast<
+                    std::chrono::duration< float >
+                >( current_time - start_time ).count() * 10.0f ),
+                glm::vec3( 0.0f, 0.0f, 1.0f )
+            );
+            shader_program.try_set_uniform(
+                "transform",
+                transform
+            );
+            
             glDrawElements(
                 GL_TRIANGLES,       // Type of primitive
                 6,                  // Number of elements
@@ -544,8 +588,8 @@ int main( int argc, char* argv[] )
         
         glClearColor( 0.0f, 0.0f, 0.0f, 0.0f );
         
-        auto start_timestamp = std::chrono::high_resolution_clock::now();
-        auto previous_timestamp = start_timestamp;
+        auto start_time = std::chrono::high_resolution_clock::now();
+        auto previous_time = start_time;
         
         SDL_Event window_event;
         while( true )
@@ -565,21 +609,19 @@ int main( int argc, char* argv[] )
                     break;
             }
             
-            auto current_timestamp = std::chrono::high_resolution_clock::now();
-            auto time_absolute = current_timestamp - start_timestamp;
-            auto time_delta    = current_timestamp - previous_timestamp;
+            auto current_time = std::chrono::high_resolution_clock::now();
             
             shader_program.try_set_uniform(
                 "time_absolute",
                 std::chrono::duration_cast<
                     std::chrono::duration< float >
-                >( time_absolute ).count()
+                >( current_time - start_time ).count()
             );
             shader_program.try_set_uniform(
                 "time_delta",
                 std::chrono::duration_cast<
                     std::chrono::duration< float >
-                >( time_delta ).count()
+                >( current_time - previous_time ).count()
             );
             
             glClear(
@@ -592,13 +634,13 @@ int main( int argc, char* argv[] )
             
             tutorial.update(
                 shader_program,
-                time_absolute,
-                time_delta
+                start_time,
+                current_time
             );
             
             SDL_GL_SwapWindow( window.sdl_window );
             
-            previous_timestamp = current_timestamp;
+            previous_time = current_time;
         }
         
         return 0;
