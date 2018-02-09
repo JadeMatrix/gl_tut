@@ -19,7 +19,6 @@
 #include <fstream>
 #include <iostream>
 #include <string>
-// #include <thread>   // std::this_thread::yield()
 #include <vector>
 
 
@@ -396,7 +395,7 @@ namespace
         GLuint triangle_vbo;
         GLuint triangle_ebo;
         
-        glm::mat4 transform;
+        // glm::mat4 transform;
         
         tutorial_manager(
             gl_tut::GL_shader_program& shader_program,
@@ -432,7 +431,6 @@ namespace
                  0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, // bottom right
                 -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f  // bottom left
             };
-            // GLuint triangle_vbo;
             glGenBuffers( 1, &triangle_vbo );
             glBindBuffer( GL_ARRAY_BUFFER, triangle_vbo );
             glBufferData(
@@ -446,7 +444,6 @@ namespace
                 0, 1, 2,
                 2, 3, 0
             };
-            // GLuint triangle_ebo;
             glGenBuffers( 1, &triangle_ebo );
             glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, triangle_ebo );
             glBufferData(
@@ -489,24 +486,13 @@ namespace
             glEnableVertexAttribArray( texture_coord_attr );
             glVertexAttribPointer(
                 texture_coord_attr,  // Data source
-                3,                   // Components per element
+                2,                   // Components per element
                 GL_FLOAT,            // Component type
                 GL_FALSE,            // Components should be normalized
                 7 * sizeof( float ), // Component stride in bytes (0 = packed)
                 ( void* )( 5 * sizeof( float ) )
                                      // Component offset within stride
             );
-            
-            
-            // Transform matrix ////////////////////////////////////////////////
-            
-            
-            transform = glm::mat4( 1.0f );
-            // transform = glm::rotate(
-            //     transform,
-            //     glm::radians( 180.0f ),
-            //     glm::vec3( 0.0f, 0.0f, 1.0f )
-            // );
         }
         
         void update(
@@ -515,16 +501,41 @@ namespace
             const std::chrono::high_resolution_clock::time_point current_time
         )
         {
-            transform = glm::rotate(
-                glm::mat4( 1.0f ),
-                glm::radians( std::chrono::duration_cast<
-                    std::chrono::duration< float >
-                >( current_time - start_time ).count() * 10.0f ),
-                glm::vec3( 0.0f, 0.0f, 1.0f )
+            // // DEBUG:
+            // glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
+            
+            glm::mat4 transform_model = glm::mat4( 1.0f );
+            // glm::mat4 transform_model = glm::rotate(
+            //     glm::mat4( 1.0f ),
+            //     glm::radians( std::chrono::duration_cast<
+            //         std::chrono::duration< float >
+            //     >( current_time - start_time ).count() * 10.0f ),
+            //     glm::vec3( 0.0f, 0.0f, 1.0f )
+            // );
+            shader_program.try_set_uniform(
+                "transform_model",
+                transform_model
+            );
+            
+            glm::mat4 transform_view = glm::lookAt(
+                glm::vec3( 1.2f, 1.2f, 1.2f ),  // Camera position
+                glm::vec3( 0.0f, 0.0f, 0.0f ),  // Look-at point
+                glm::vec3( 0.0f, 0.0f, 1.0f )   // Up unit vector
             );
             shader_program.try_set_uniform(
-                "transform",
-                transform
+                "transform_view",
+                transform_view
+            );
+            
+            glm::mat4 transform_projection = glm::perspective(
+                glm::radians( 45.0f ),  // Vertical FoV
+                800.0f / 600.0f,        // Aspect ratio
+                1.0f,                   // Near plane
+                10.0f                   // Far plane
+            );
+            shader_program.try_set_uniform(
+                "transform_projection",
+                transform_projection
             );
             
             glDrawElements(
