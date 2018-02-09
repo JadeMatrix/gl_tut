@@ -520,21 +520,18 @@ namespace
     class scene_render_step : public gl_tut::render_step
     {
     public:
-        std::chrono::high_resolution_clock::time_point start_time;
-        std::chrono::high_resolution_clock::time_point previous_time;
         gl_tut::GL_shader_program* shader_program;
-        
         GLuint triangle_vbo;
-        GLuint textures[ 2 ];
         
         scene_render_step()
         {
-            start_time = std::chrono::high_resolution_clock::now();
-            previous_time = start_time;
-            
             auto vertex_shader = gl_tut::GL_shader::from_file(
                 GL_VERTEX_SHADER,
                 "../src/vertex_shader.vert"
+            );
+            auto geometry_shader = gl_tut::GL_shader::from_file(
+                GL_GEOMETRY_SHADER,
+                "../src/geometry_shader.geom"
             );
             auto fragment_shader = gl_tut::GL_shader::from_file(
                 GL_FRAGMENT_SHADER,
@@ -543,85 +540,29 @@ namespace
             
             shader_program = new gl_tut::GL_shader_program( {
                 vertex_shader.id,
+                geometry_shader.id,
                 fragment_shader.id
             } );
             shader_program -> use();
             
-            // Load textures ///////////////////////////////////////////////////
-            
-            glGenTextures( 2, textures );
-            
-            glBindTexture( GL_TEXTURE_2D, textures[ 0 ] );
-            gl_tut::load_bound_texture( "../resources/textures/rgb.png" );
-            
-            glBindTexture( GL_TEXTURE_2D, textures[ 1 ] );
-            gl_tut::load_bound_texture( "../resources/textures/b&w.png" );
-            
             
             // Create shader input data ////////////////////////////////////////
             
-            float triangle_vertices[] = {
-            //  Position ----------| Color ----------| Texture --|
-            //      X,     Y,     Z,    R,    G,    B,    U,    V
-                
-                // Cube //////////////////////////////////////////
-                -0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
-                 0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
-                 0.5f,  0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
-                 0.5f,  0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
-                -0.5f,  0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
-                -0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
-
-                -0.5f, -0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
-                 0.5f, -0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
-                 0.5f,  0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
-                 0.5f,  0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
-                -0.5f,  0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
-                -0.5f, -0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
-
-                -0.5f,  0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
-                -0.5f,  0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
-                -0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
-                -0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
-                -0.5f, -0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
-                -0.5f,  0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
-
-                 0.5f,  0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
-                 0.5f,  0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
-                 0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
-                 0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
-                 0.5f, -0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
-                 0.5f,  0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
-
-                -0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
-                 0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
-                 0.5f, -0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
-                 0.5f, -0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
-                -0.5f, -0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
-                -0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
-
-                -0.5f,  0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
-                 0.5f,  0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
-                 0.5f,  0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
-                 0.5f,  0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
-                -0.5f,  0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
-                -0.5f,  0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
-                
-                // Reflection ////////////////////////////////////
-                -1.0f, -1.0f, -0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-                 1.0f, -1.0f, -0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
-                 1.0f,  1.0f, -0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f,
-                 1.0f,  1.0f, -0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f,
-                -1.0f,  1.0f, -0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
-                -1.0f, -1.0f, -0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+            float vertices[] = {
+            //  Position -------------| Color ----------| Texture --| Sides
+            //       X,      Y,      Z,    R,    G,    B,    U,    V,    N
+                -0.45f,  0.45f,         1.0f, 0.0f, 0.0f,             4.0f,
+                 0.45f,  0.45f,         0.0f, 1.0f, 0.0f,             8.0f,
+                 0.45f, -0.45f,         0.0f, 0.0f, 1.0f,            16.0f,
+                -0.45f, -0.45f,         1.0f, 1.0f, 0.0f,            32.0f
             };
             glGenBuffers( 1, &triangle_vbo );
             glBindBuffer( GL_ARRAY_BUFFER, triangle_vbo );
             glBufferData(
                GL_ARRAY_BUFFER,
-               sizeof( triangle_vertices ),
-               triangle_vertices,
-               GL_STATIC_DRAW // GL_DYNAMIC_DRAW, GL_STREAM_DRAW
+               sizeof( vertices ),
+               vertices,
+               GL_STATIC_DRAW
             );
             
             
@@ -631,10 +572,10 @@ namespace
             glEnableVertexAttribArray( position_attr );
             glVertexAttribPointer(
                 position_attr,       // Data source
-                3,                   // Components per element
+                2,                   // Components per element
                 GL_FLOAT,            // Component type
                 GL_FALSE,            // Components should be normalized
-                8 * sizeof( float ), // Component stride in bytes (0 = packed)
+                6 * sizeof( float ), // Component stride in bytes (0 = packed)
                 NULL                 // Component offset within stride
             );
             
@@ -645,29 +586,26 @@ namespace
                 3,                   // Components per element
                 GL_FLOAT,            // Component type
                 GL_FALSE,            // Components should be normalized
-                8 * sizeof( float ), // Component stride in bytes (0 = packed)
-                ( void* )( 3 * sizeof( float ) )
+                6 * sizeof( float ), // Component stride in bytes (0 = packed)
+                ( void* )( 2 * sizeof( float ) )
                                      // Component offset within stride
             );
             
-            GLint texture_coord_attr = shader_program -> attribute(
-                "texture_coord_in"
-            );
-            glEnableVertexAttribArray( texture_coord_attr );
+            GLint sides_attr = shader_program -> attribute( "sides" );
+            glEnableVertexAttribArray( sides_attr );
             glVertexAttribPointer(
-                texture_coord_attr,  // Data source
-                2,                   // Components per element
+                sides_attr,          // Data source
+                1,                   // Components per element
                 GL_FLOAT,            // Component type
                 GL_FALSE,            // Components should be normalized
-                8 * sizeof( float ), // Component stride in bytes (0 = packed)
-                ( void* )( 6 * sizeof( float ) )
+                6 * sizeof( float ), // Component stride in bytes (0 = packed)
+                ( void* )( 5 * sizeof( float ) )
                                      // Component offset within stride
             );
         }
         
         ~scene_render_step()
         {
-            glDeleteTextures( 2, textures );
             glDeleteBuffers( 1, &triangle_vbo );
             delete shader_program;
         }
@@ -676,150 +614,19 @@ namespace
         {
             shader_program -> use();
             
-            auto current_time = std::chrono::high_resolution_clock::now();
-            
-            glActiveTexture( GL_TEXTURE0 );
-            glBindTexture( GL_TEXTURE_2D, textures[ 0 ] );
-            shader_program -> set_uniform( "texture_A", 0 );
-            
-            glActiveTexture( GL_TEXTURE1 );
-            glBindTexture( GL_TEXTURE_2D, textures[ 1 ] );
-            shader_program -> set_uniform( "texture_B", 1 );
-            
-            shader_program -> try_set_uniform(
-                "time_absolute",
-                std::chrono::duration_cast<
-                    std::chrono::duration< float >
-                >( current_time - start_time ).count()
-            );
-            shader_program -> try_set_uniform(
-                "time_delta",
-                std::chrono::duration_cast<
-                    std::chrono::duration< float >
-                >( current_time - previous_time ).count()
-            );
-            
-            previous_time = current_time;
-            
             glEnable( GL_DEPTH_TEST );
-            glClearColor( 0.5f, 0.5f, 0.5f, 1.0f );
+            glClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
             glClear(
                   GL_COLOR_BUFFER_BIT
                 | GL_DEPTH_BUFFER_BIT
                 | GL_STENCIL_BUFFER_BIT
             );
             
-            
-            // Set up matrices /////////////////////////////////////////////////
-            
-            glm::mat4 transform_model = glm::mat4( 1.0f );
-            shader_program -> try_set_uniform(
-                "transform_model",
-                transform_model
-            );
-            
-            glm::mat4 transform_view = glm::lookAt(
-                glm::vec3( 2.2f, 2.2f, 2.2f ),  // Camera position
-                glm::vec3( 0.0f, 0.0f, 0.0f ),  // Look-at point
-                glm::vec3( 0.0f, 0.0f, 1.0f )   // Up unit vector
-            );
-            shader_program -> try_set_uniform(
-                "transform_view",
-                transform_view
-            );
-            
-            glm::mat4 transform_projection = glm::perspective(
-                glm::radians( 45.0f ),  // Vertical FoV
-                800.0f / 600.0f,        // Aspect ratio
-                1.0f,                   // Near plane
-                10.0f                   // Far plane
-            );
-            shader_program -> try_set_uniform(
-                "transform_projection",
-                transform_projection
-            );
-            
-            
-            // Draw cube ///////////////////////////////////////////////////////
-            
             glDrawArrays(
-                GL_TRIANGLES,   // Type of primitive
-                0,              // Starting at element
-                36              // Number of elements
+                GL_POINTS,  // Type of primitive
+                0,          // Starting at element
+                4           // Number of elements
             );
-            
-            
-            // Stencil write for floor /////////////////////////////////////////
-            
-            glEnable( GL_STENCIL_TEST );
-            
-            glStencilFunc(
-                GL_ALWAYS,  // Stencil function (GL_NEVER, GL_LESS, GL_LEQUAL, GL_GREATER, GL_GEQUAL, GL_EQUAL, GL_NOTEQUAL, GL_ALWAYS)
-                1,          // Stencil compare value
-                0xFF        // Stencil value mask
-            );
-            glStencilOp(
-                // GL_KEEP, GL_ZERO, GL_REPLACE, GL_INCR, GL_INCR_WRAP, GL_DECR, GL_DECR_WRAP, GL_INVERT
-                GL_KEEP,    // Stencil fail action
-                GL_KEEP,    // Stencil pass, depth fail action
-                GL_REPLACE  // Stencil & depth pass action
-            );
-            glStencilMask(
-                0xFF        // Stencil write mask
-            );
-            
-            glClear( GL_STENCIL_BUFFER_BIT );
-            
-            
-            // Draw floor //////////////////////////////////////////////////////
-            
-            glDepthMask( GL_FALSE );
-            glDrawArrays(
-                GL_TRIANGLES,   // Type of primitive
-                36,             // Starting at element
-                6               // Number of elements
-            );
-            glDepthMask( GL_TRUE );
-            
-            
-            // Set stencil test ////////////////////////////////////////////////
-            
-            glStencilFunc( GL_EQUAL, 1, 0xFF );
-            glStencilMask( 0x00 );
-            
-            
-            // Draw reflected cube /////////////////////////////////////////////
-            
-            transform_model = glm::scale(
-                glm::translate(
-                    glm::mat4( 1.0f ),
-                    glm::vec3( 0.0f, 0.0f, -1.0f )
-                ),
-                glm::vec3( 1.0f, 1.0f, -1.0f )
-            );
-            shader_program -> try_set_uniform(
-                "transform_model",
-                transform_model
-            );
-            
-            shader_program -> try_set_uniform(
-                "tint",
-                glm::vec3( 0.3f, 0.3f, 0.3f )
-            );
-            glDrawArrays(
-                GL_TRIANGLES,   // Type of primitive
-                0,              // Starting at element
-                36              // Number of elements
-            );
-            shader_program -> try_set_uniform(
-                "tint",
-                glm::vec3( 1.0f, 1.0f, 1.0f )
-            );
-            
-            
-            // Disable stencil testing /////////////////////////////////////////
-            
-            glDisable( GL_STENCIL_TEST );
         }
     };
     
@@ -962,8 +769,8 @@ int main( int argc, char* argv[] )
     #endif
         
         std::vector< gl_tut::render_step* > render_steps = {
-            new scene_render_step(),
-            new postprocess_render_step()
+            new scene_render_step()/*,
+            new postprocess_render_step()*/
         };
         
         gl_tut::GL_framebuffer preprocessing_framebuffer(
