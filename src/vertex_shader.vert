@@ -1,7 +1,7 @@
 #version 150 core
 
 
-in vec2 position;
+in vec3 position;
 in vec3 color_in;
 in vec2 texture_coord_in;
 
@@ -33,7 +33,7 @@ void main()
         * vec4(
             position.x,
             position.y * -1.0,
-            0.0,
+            position.z,
             1.0
         )
     );

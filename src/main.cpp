@@ -283,7 +283,9 @@ namespace gl_tut
         glUniform1f( uniform_id, value );
         if( glGetError() != GL_NO_ERROR )
             throw wrong_variable_type(
-                "unable to set float uniform of program "
+                "unable to set float uniform \""
+                + uniform_name
+                + "\" of program "
                 + std::to_string( id )
             );
     }
@@ -297,7 +299,9 @@ namespace gl_tut
         glUniform1i( uniform_id, value );
         if( glGetError() != GL_NO_ERROR )
             throw wrong_variable_type(
-                "unable to set integer uniform of program "
+                "unable to set integer uniform \""
+                + uniform_name
+                + "\" of program "
                 + std::to_string( id )
             );
     }
@@ -316,7 +320,30 @@ namespace gl_tut
         );
         if( glGetError() != GL_NO_ERROR )
             throw wrong_variable_type(
-                "unable to set matrix4 uniform of program "
+                "unable to set matrix4 uniform \""
+                + uniform_name
+                + "\" of program "
+                + std::to_string( id )
+            );
+    }
+    
+    template<> void GL_shader_program::set_uniform< glm::vec3 >(
+        const std::string& uniform_name,
+        const glm::vec3& value
+    )
+    {
+        auto uniform_id = uniform( uniform_name );
+        glUniform3f(
+            uniform_id,
+            value[ 0 ],
+            value[ 1 ],
+            value[ 2 ]
+        );
+        if( glGetError() != GL_NO_ERROR )
+            throw wrong_variable_type(
+                "unable to set vector3 uniform \""
+                + uniform_name
+                + "\" of program "
                 + std::to_string( id )
             );
     }
@@ -403,6 +430,11 @@ namespace
             char* argv[]
         )
         {
+            glEnable( GL_DEPTH_TEST );
+            
+            glClearColor( 0.5f, 0.5f, 0.5f, 1.0f );
+            
+            
             // Load textures ///////////////////////////////////////////////////
             
             
@@ -424,12 +456,59 @@ namespace
             
             
             float triangle_vertices[] = {
-            //  Position ---| Color ----------| Texture --|
-            //      X,     Y,    R,    G,    B,    S,    T
-                -0.5f,  0.5f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, //    top left
-                 0.5f,  0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, //    top right
-                 0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, // bottom right
-                -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f  // bottom left
+            //  Position ----------| Color ----------| Texture --|
+            //      X,     Y,     Z,    R,    G,    B,    U,    V
+                
+                // Cube //////////////////////////////////////////
+                -0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+                 0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
+                 0.5f,  0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
+                 0.5f,  0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
+                -0.5f,  0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
+                -0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+
+                -0.5f, -0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+                 0.5f, -0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
+                 0.5f,  0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
+                 0.5f,  0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
+                -0.5f,  0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
+                -0.5f, -0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+
+                -0.5f,  0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
+                -0.5f,  0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
+                -0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
+                -0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
+                -0.5f, -0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+                -0.5f,  0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
+
+                 0.5f,  0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
+                 0.5f,  0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
+                 0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
+                 0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
+                 0.5f, -0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+                 0.5f,  0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
+
+                -0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
+                 0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
+                 0.5f, -0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
+                 0.5f, -0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
+                -0.5f, -0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+                -0.5f, -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
+
+                -0.5f,  0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
+                 0.5f,  0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
+                 0.5f,  0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
+                 0.5f,  0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
+                -0.5f,  0.5f,  0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+                -0.5f,  0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
+                
+                // Reflection ////////////////////////////////////
+                -1.0f, -1.0f, -0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                 1.0f, -1.0f, -0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+                 1.0f,  1.0f, -0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f,
+                 1.0f,  1.0f, -0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f,
+                -1.0f,  1.0f, -0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
+                -1.0f, -1.0f, -0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
             };
             glGenBuffers( 1, &triangle_vbo );
             glBindBuffer( GL_ARRAY_BUFFER, triangle_vbo );
@@ -440,18 +519,18 @@ namespace
                GL_STATIC_DRAW // GL_DYNAMIC_DRAW, GL_STREAM_DRAW
             );
             
-            GLuint triangle_elements[] = {
-                0, 1, 2,
-                2, 3, 0
-            };
-            glGenBuffers( 1, &triangle_ebo );
-            glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, triangle_ebo );
-            glBufferData(
-                GL_ELEMENT_ARRAY_BUFFER,
-                sizeof( triangle_elements ),
-                triangle_elements,
-                GL_STATIC_DRAW
-            );
+            // GLuint triangle_elements[] = {
+            //     0, 1, 2,
+            //     2, 3, 0
+            // };
+            // glGenBuffers( 1, &triangle_ebo );
+            // glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, triangle_ebo );
+            // glBufferData(
+            //     GL_ELEMENT_ARRAY_BUFFER,
+            //     sizeof( triangle_elements ),
+            //     triangle_elements,
+            //     GL_STATIC_DRAW
+            // );
             
             
             // Configure shader program attributes /////////////////////////////
@@ -461,10 +540,10 @@ namespace
             glEnableVertexAttribArray( position_attr );
             glVertexAttribPointer(
                 position_attr,       // Data source
-                2,                   // Components per element
+                3,                   // Components per element
                 GL_FLOAT,            // Component type
                 GL_FALSE,            // Components should be normalized
-                7 * sizeof( float ), // Component stride in bytes (0 = packed)
+                8 * sizeof( float ), // Component stride in bytes (0 = packed)
                 NULL                 // Component offset within stride
             );
             
@@ -475,8 +554,8 @@ namespace
                 3,                   // Components per element
                 GL_FLOAT,            // Component type
                 GL_FALSE,            // Components should be normalized
-                7 * sizeof( float ), // Component stride in bytes (0 = packed)
-                ( void* )( 2 * sizeof( float ) )
+                8 * sizeof( float ), // Component stride in bytes (0 = packed)
+                ( void* )( 3 * sizeof( float ) )
                                      // Component offset within stride
             );
             
@@ -489,8 +568,8 @@ namespace
                 2,                   // Components per element
                 GL_FLOAT,            // Component type
                 GL_FALSE,            // Components should be normalized
-                7 * sizeof( float ), // Component stride in bytes (0 = packed)
-                ( void* )( 5 * sizeof( float ) )
+                8 * sizeof( float ), // Component stride in bytes (0 = packed)
+                ( void* )( 6 * sizeof( float ) )
                                      // Component offset within stride
             );
         }
@@ -504,21 +583,17 @@ namespace
             // // DEBUG:
             // glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
             
+            
+            // Set up matrices /////////////////////////////////////////////////
+            
             glm::mat4 transform_model = glm::mat4( 1.0f );
-            // glm::mat4 transform_model = glm::rotate(
-            //     glm::mat4( 1.0f ),
-            //     glm::radians( std::chrono::duration_cast<
-            //         std::chrono::duration< float >
-            //     >( current_time - start_time ).count() * 10.0f ),
-            //     glm::vec3( 0.0f, 0.0f, 1.0f )
-            // );
             shader_program.try_set_uniform(
                 "transform_model",
                 transform_model
             );
             
             glm::mat4 transform_view = glm::lookAt(
-                glm::vec3( 1.2f, 1.2f, 1.2f ),  // Camera position
+                glm::vec3( 2.2f, 2.2f, 2.2f ),  // Camera position
                 glm::vec3( 0.0f, 0.0f, 0.0f ),  // Look-at point
                 glm::vec3( 0.0f, 0.0f, 1.0f )   // Up unit vector
             );
@@ -538,12 +613,93 @@ namespace
                 transform_projection
             );
             
-            glDrawElements(
-                GL_TRIANGLES,       // Type of primitive
-                6,                  // Number of elements
-                GL_UNSIGNED_INT,    // Type of element
-                0                   // Starting at element
+            
+            // Draw cube ///////////////////////////////////////////////////////
+            
+            // glDrawElements(
+            //     GL_TRIANGLES,       // Type of primitive
+            //     6,                  // Number of elements
+            //     GL_UNSIGNED_INT,    // Type of element
+            //     0                   // Starting at element
+            // );
+            glDrawArrays(
+                GL_TRIANGLES,   // Type of primitive
+                0,              // Starting at element
+                36              // Number of elements
             );
+            
+            
+            // Stencil write for floor /////////////////////////////////////////
+            
+            glEnable( GL_STENCIL_TEST );
+            
+            glStencilFunc(
+                GL_ALWAYS,  // Stencil function (GL_NEVER, GL_LESS, GL_LEQUAL, GL_GREATER, GL_GEQUAL, GL_EQUAL, GL_NOTEQUAL, GL_ALWAYS)
+                1,          // Stencil compare value
+                0xFF        // Stencil value mask
+            );
+            glStencilOp(
+                // GL_KEEP, GL_ZERO, GL_REPLACE, GL_INCR, GL_INCR_WRAP, GL_DECR, GL_DECR_WRAP, GL_INVERT
+                GL_KEEP,    // Stencil fail action
+                GL_KEEP,    // Stencil pass, depth fail action
+                GL_REPLACE  // Stencil & depth pass action
+            );
+            glStencilMask(
+                0xFF        // Stencil write mask
+            );
+            
+            glClear( GL_STENCIL_BUFFER_BIT );
+            
+            
+            // Draw floor //////////////////////////////////////////////////////
+            
+            glDepthMask( GL_FALSE );
+            glDrawArrays(
+                GL_TRIANGLES,   // Type of primitive
+                36,             // Starting at element
+                6               // Number of elements
+            );
+            glDepthMask( GL_TRUE );
+            
+            
+            // Set stencil test ////////////////////////////////////////////////
+            
+            glStencilFunc( GL_EQUAL, 1, 0xFF );
+            glStencilMask( 0x00 );
+            
+            
+            // Draw reflected cube /////////////////////////////////////////////
+            
+            transform_model = glm::scale(
+                glm::translate(
+                    glm::mat4( 1.0f ),
+                    glm::vec3( 0.0f, 0.0f, -1.0f )
+                ),
+                glm::vec3( 1.0f, 1.0f, -1.0f )
+            );
+            shader_program.try_set_uniform(
+                "transform_model",
+                transform_model
+            );
+            
+            shader_program.try_set_uniform(
+                "tint",
+                glm::vec3( 0.3f, 0.3f, 0.3f )
+            );
+            glDrawArrays(
+                GL_TRIANGLES,   // Type of primitive
+                0,              // Starting at element
+                36              // Number of elements
+            );
+            shader_program.try_set_uniform(
+                "tint",
+                glm::vec3( 1.0f, 1.0f, 1.0f )
+            );
+            
+            
+            // Disable stencil testing /////////////////////////////////////////
+            
+            glDisable( GL_STENCIL_TEST );
         }
         
         ~tutorial_manager()
@@ -596,8 +752,6 @@ int main( int argc, char* argv[] )
         shader_program.use();
         
         auto tutorial = tutorial_manager( shader_program, argc, argv );
-        
-        glClearColor( 0.0f, 0.0f, 0.0f, 0.0f );
         
         auto start_time = std::chrono::high_resolution_clock::now();
         auto previous_time = start_time;
