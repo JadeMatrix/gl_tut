@@ -306,6 +306,22 @@ namespace gl_tut
             );
     }
     
+    // template<> void GL_shader_program::set_uniform< unsigned int >(
+    //     const std::string& uniform_name,
+    //     const unsigned int& value
+    // )
+    // {
+    //     auto uniform_id = uniform( uniform_name );
+    //     glUniform1ui( uniform_id, value );
+    //     if( glGetError() != GL_NO_ERROR )
+    //         throw wrong_variable_type(
+    //             "unable to set unsigned integer uniform \""
+    //             + uniform_name
+    //             + "\" of program "
+    //             + std::to_string( id )
+    //         );
+    // }
+    
     template<> void GL_shader_program::set_uniform< glm::mat4 >(
         const std::string& uniform_name,
         const glm::mat4& value
@@ -411,49 +427,138 @@ namespace gl_tut
         
         return true;
     }
+    
+    class GL_framebuffer
+    {
+    public:
+        GLuint id;
+        GLuint color_buffer;
+        GLuint depth_stencil_buffer;
+        
+        GL_framebuffer(
+            GLsizei width,
+            GLsizei height
+        )
+        {
+            glGenFramebuffers( 1, &id );
+            glBindFramebuffer( GL_FRAMEBUFFER, id );
+            
+            glGenTextures( 1, &color_buffer );
+            glBindTexture( GL_TEXTURE_2D, color_buffer );
+            
+            glTexImage2D(
+                GL_TEXTURE_2D,
+                0,
+                GL_RGB,
+                width, height,
+                0,
+                GL_RGB,
+                GL_UNSIGNED_BYTE,
+                nullptr
+            );
+            glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+            glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+            
+            glFramebufferTexture2D(
+                GL_FRAMEBUFFER,
+                GL_COLOR_ATTACHMENT0,   // Which attachment
+                GL_TEXTURE_2D,
+                color_buffer,
+                0                       // Mipmap level (not useful)
+            );
+            
+            glGenRenderbuffers( 1, &depth_stencil_buffer );
+            glBindRenderbuffer( GL_RENDERBUFFER, depth_stencil_buffer );
+            
+            glRenderbufferStorage(
+                GL_RENDERBUFFER,
+                GL_DEPTH24_STENCIL8,
+                width, height
+            );
+            
+            glFramebufferRenderbuffer(
+                GL_FRAMEBUFFER,
+                GL_DEPTH_STENCIL_ATTACHMENT,
+                GL_RENDERBUFFER,
+                depth_stencil_buffer
+            );
+            
+            if(
+                glCheckFramebufferStatus( GL_FRAMEBUFFER )
+                != GL_FRAMEBUFFER_COMPLETE
+            )
+            {
+                glDeleteFramebuffers( 1, &id );
+                glDeleteTextures( 1, &color_buffer );
+                glDeleteRenderbuffers( 1, &depth_stencil_buffer );
+                throw std::runtime_error( "failed to complete famebuffer" );
+            }
+        }
+        
+        ~GL_framebuffer()
+        {
+            glDeleteFramebuffers( 1, &id );
+            glDeleteTextures( 1, &color_buffer );
+            glDeleteRenderbuffers( 1, &depth_stencil_buffer );
+        }
+    };
+    
+    class render_step
+    {
+    public:
+        virtual ~render_step() {};
+        virtual void run( GL_framebuffer& ) = 0;
+    };
 }
 
 
 namespace
 {
-    class tutorial_manager
+    const int window_width  = 800;
+    const int window_height = 600;
+    
+    class scene_render_step : public gl_tut::render_step
     {
     public:
+        std::chrono::high_resolution_clock::time_point start_time;
+        std::chrono::high_resolution_clock::time_point previous_time;
+        gl_tut::GL_shader_program* shader_program;
+        
         GLuint triangle_vbo;
-        GLuint triangle_ebo;
+        GLuint textures[ 2 ];
         
-        // glm::mat4 transform;
-        
-        tutorial_manager(
-            gl_tut::GL_shader_program& shader_program,
-            int argc,
-            char* argv[]
-        )
+        scene_render_step()
         {
-            glEnable( GL_DEPTH_TEST );
+            start_time = std::chrono::high_resolution_clock::now();
+            previous_time = start_time;
             
-            glClearColor( 0.5f, 0.5f, 0.5f, 1.0f );
+            auto vertex_shader = gl_tut::GL_shader::from_file(
+                GL_VERTEX_SHADER,
+                "../src/vertex_shader.vert"
+            );
+            auto fragment_shader = gl_tut::GL_shader::from_file(
+                GL_FRAGMENT_SHADER,
+                "../src/fragment_shader.frag"
+            );
             
+            shader_program = new gl_tut::GL_shader_program( {
+                vertex_shader.id,
+                fragment_shader.id
+            } );
+            shader_program -> use();
             
             // Load textures ///////////////////////////////////////////////////
             
-            
-            GLuint textures[ 2 ];
             glGenTextures( 2, textures );
             
-            glActiveTexture( GL_TEXTURE0 );
             glBindTexture( GL_TEXTURE_2D, textures[ 0 ] );
             gl_tut::load_bound_texture( "../resources/textures/rgb.png" );
-            shader_program.set_uniform( "texture_A", 0 );
             
-            glActiveTexture( GL_TEXTURE1 );
             glBindTexture( GL_TEXTURE_2D, textures[ 1 ] );
             gl_tut::load_bound_texture( "../resources/textures/b&w.png" );
-            shader_program.set_uniform( "texture_B", 1 );
             
             
             // Create shader input data ////////////////////////////////////////
-            
             
             float triangle_vertices[] = {
             //  Position ----------| Color ----------| Texture --|
@@ -519,24 +624,10 @@ namespace
                GL_STATIC_DRAW // GL_DYNAMIC_DRAW, GL_STREAM_DRAW
             );
             
-            // GLuint triangle_elements[] = {
-            //     0, 1, 2,
-            //     2, 3, 0
-            // };
-            // glGenBuffers( 1, &triangle_ebo );
-            // glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, triangle_ebo );
-            // glBufferData(
-            //     GL_ELEMENT_ARRAY_BUFFER,
-            //     sizeof( triangle_elements ),
-            //     triangle_elements,
-            //     GL_STATIC_DRAW
-            // );
-            
             
             // Configure shader program attributes /////////////////////////////
             
-            
-            GLint position_attr = shader_program.attribute( "position" );
+            GLint position_attr = shader_program -> attribute( "position" );
             glEnableVertexAttribArray( position_attr );
             glVertexAttribPointer(
                 position_attr,       // Data source
@@ -547,7 +638,7 @@ namespace
                 NULL                 // Component offset within stride
             );
             
-            GLint color_attr = shader_program.attribute( "color_in" );
+            GLint color_attr = shader_program -> attribute( "color_in" );
             glEnableVertexAttribArray( color_attr );
             glVertexAttribPointer(
                 color_attr,          // Data source
@@ -559,7 +650,7 @@ namespace
                                      // Component offset within stride
             );
             
-            GLint texture_coord_attr = shader_program.attribute(
+            GLint texture_coord_attr = shader_program -> attribute(
                 "texture_coord_in"
             );
             glEnableVertexAttribArray( texture_coord_attr );
@@ -574,20 +665,55 @@ namespace
             );
         }
         
-        void update(
-            gl_tut::GL_shader_program& shader_program,
-            const std::chrono::high_resolution_clock::time_point start_time,
-            const std::chrono::high_resolution_clock::time_point current_time
-        )
+        ~scene_render_step()
         {
-            // // DEBUG:
-            // glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
+            glDeleteTextures( 2, textures );
+            glDeleteBuffers( 1, &triangle_vbo );
+            delete shader_program;
+        }
+        
+        void run( gl_tut::GL_framebuffer& previous_framebuffer )
+        {
+            shader_program -> use();
+            
+            auto current_time = std::chrono::high_resolution_clock::now();
+            
+            glActiveTexture( GL_TEXTURE0 );
+            glBindTexture( GL_TEXTURE_2D, textures[ 0 ] );
+            shader_program -> set_uniform( "texture_A", 0 );
+            
+            glActiveTexture( GL_TEXTURE1 );
+            glBindTexture( GL_TEXTURE_2D, textures[ 1 ] );
+            shader_program -> set_uniform( "texture_B", 1 );
+            
+            shader_program -> try_set_uniform(
+                "time_absolute",
+                std::chrono::duration_cast<
+                    std::chrono::duration< float >
+                >( current_time - start_time ).count()
+            );
+            shader_program -> try_set_uniform(
+                "time_delta",
+                std::chrono::duration_cast<
+                    std::chrono::duration< float >
+                >( current_time - previous_time ).count()
+            );
+            
+            previous_time = current_time;
+            
+            glEnable( GL_DEPTH_TEST );
+            glClearColor( 0.5f, 0.5f, 0.5f, 1.0f );
+            glClear(
+                  GL_COLOR_BUFFER_BIT
+                | GL_DEPTH_BUFFER_BIT
+                | GL_STENCIL_BUFFER_BIT
+            );
             
             
             // Set up matrices /////////////////////////////////////////////////
             
             glm::mat4 transform_model = glm::mat4( 1.0f );
-            shader_program.try_set_uniform(
+            shader_program -> try_set_uniform(
                 "transform_model",
                 transform_model
             );
@@ -597,7 +723,7 @@ namespace
                 glm::vec3( 0.0f, 0.0f, 0.0f ),  // Look-at point
                 glm::vec3( 0.0f, 0.0f, 1.0f )   // Up unit vector
             );
-            shader_program.try_set_uniform(
+            shader_program -> try_set_uniform(
                 "transform_view",
                 transform_view
             );
@@ -608,7 +734,7 @@ namespace
                 1.0f,                   // Near plane
                 10.0f                   // Far plane
             );
-            shader_program.try_set_uniform(
+            shader_program -> try_set_uniform(
                 "transform_projection",
                 transform_projection
             );
@@ -616,12 +742,6 @@ namespace
             
             // Draw cube ///////////////////////////////////////////////////////
             
-            // glDrawElements(
-            //     GL_TRIANGLES,       // Type of primitive
-            //     6,                  // Number of elements
-            //     GL_UNSIGNED_INT,    // Type of element
-            //     0                   // Starting at element
-            // );
             glDrawArrays(
                 GL_TRIANGLES,   // Type of primitive
                 0,              // Starting at element
@@ -677,12 +797,12 @@ namespace
                 ),
                 glm::vec3( 1.0f, 1.0f, -1.0f )
             );
-            shader_program.try_set_uniform(
+            shader_program -> try_set_uniform(
                 "transform_model",
                 transform_model
             );
             
-            shader_program.try_set_uniform(
+            shader_program -> try_set_uniform(
                 "tint",
                 glm::vec3( 0.3f, 0.3f, 0.3f )
             );
@@ -691,7 +811,7 @@ namespace
                 0,              // Starting at element
                 36              // Number of elements
             );
-            shader_program.try_set_uniform(
+            shader_program -> try_set_uniform(
                 "tint",
                 glm::vec3( 1.0f, 1.0f, 1.0f )
             );
@@ -701,11 +821,116 @@ namespace
             
             glDisable( GL_STENCIL_TEST );
         }
+    };
+    
+    class postprocess_render_step : public gl_tut::render_step
+    {
+    public:
+        gl_tut::GL_shader_program* shader_program;
+        GLuint triangle_vbo;
+        GLuint triangle_ebo;
         
-        ~tutorial_manager()
+        postprocess_render_step()
         {
+            auto vertex_shader = gl_tut::GL_shader::from_file(
+                GL_VERTEX_SHADER,
+                "../src/postprocess.vert"
+            );
+            auto fragment_shader = gl_tut::GL_shader::from_file(
+                GL_FRAGMENT_SHADER,
+                "../src/postprocess.frag"
+            );
+            
+            shader_program = new gl_tut::GL_shader_program( {
+                vertex_shader.id,
+                fragment_shader.id
+            } );
+            shader_program -> use();
+            
+            float triangle_vertices[] = {
+            //      X,     Y,    S,    T
+                -1.0f,  1.0f, 0.0f, 0.0f, //    top left
+                 1.0f,  1.0f, 1.0f, 0.0f, //    top right
+                 1.0f, -1.0f, 1.0f, 1.0f, // bottom right
+                -1.0f, -1.0f, 0.0f, 1.0f  // bottom left
+            };
+            glGenBuffers( 1, &triangle_vbo );
+            glBindBuffer( GL_ARRAY_BUFFER, triangle_vbo );
+            glBufferData(
+               GL_ARRAY_BUFFER,
+               sizeof( triangle_vertices ),
+               triangle_vertices,
+               GL_STATIC_DRAW // GL_DYNAMIC_DRAW, GL_STREAM_DRAW
+            );
+            
+            GLuint triangle_elements[] = {
+                0, 1, 2,
+                2, 3, 0
+            };
+            glGenBuffers( 1, &triangle_ebo );
+            glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, triangle_ebo );
+            glBufferData(
+                GL_ELEMENT_ARRAY_BUFFER,
+                sizeof( triangle_elements ),
+                triangle_elements,
+                GL_STATIC_DRAW
+            );
+            
+            GLint position_attr = shader_program -> attribute( "position" );
+            glEnableVertexAttribArray( position_attr );
+            glVertexAttribPointer(
+                position_attr,       // Data source
+                2,                   // Components per element
+                GL_FLOAT,            // Component type
+                GL_FALSE,            // Components should be normalized
+                4 * sizeof( float ), // Component stride in bytes (0 = packed)
+                NULL                 // Component offset within stride
+            );
+            
+            GLint texture_coord_attr = shader_program -> attribute(
+                "texture_coord_in"
+            );
+            glEnableVertexAttribArray( texture_coord_attr );
+            glVertexAttribPointer(
+                texture_coord_attr,  // Data source
+                2,                   // Components per element
+                GL_FLOAT,            // Component type
+                GL_FALSE,            // Components should be normalized
+                4 * sizeof( float ), // Component stride in bytes (0 = packed)
+                ( void* )( 2 * sizeof( float ) )
+                                     // Component offset within stride
+            );
+        }
+        
+        ~postprocess_render_step()
+        {
+            delete shader_program;
             glDeleteBuffers( 1, &triangle_vbo );
-            glDeleteBuffers( 1, &triangle_ebo );
+        }
+        
+        void run( gl_tut::GL_framebuffer& previous_framebuffer )
+        {
+            glClear(
+                  GL_COLOR_BUFFER_BIT
+                | GL_DEPTH_BUFFER_BIT
+                | GL_STENCIL_BUFFER_BIT
+            );
+            
+            glDisable( GL_DEPTH_TEST );
+            shader_program -> use();
+            
+            glActiveTexture( GL_TEXTURE0 );
+            glBindTexture( GL_TEXTURE_2D, previous_framebuffer.color_buffer );
+            shader_program -> set_uniform( "framebuffer", 0 );
+            
+            glBindVertexArray( triangle_vbo );
+            
+            glDrawElements(
+                GL_TRIANGLES,       // Type of primitive
+                6,                  // Number of elements
+                GL_UNSIGNED_INT,    // Type of element
+                0                   // Starting at element
+            );
         }
     };
 }
@@ -721,8 +946,8 @@ int main( int argc, char* argv[] )
             "OpenGL",
             SDL_WINDOWPOS_CENTERED, // 100,
             SDL_WINDOWPOS_CENTERED, // 100,
-            800,
-            600,
+            window_width,
+            window_height,
             SDL_WINDOW_OPENGL // | SDL_WINDOW_RESIZABLE | SDL_WINDOW_FULLSCREEN
         );
         
@@ -736,22 +961,15 @@ int main( int argc, char* argv[] )
         }
     #endif
         
-        auto vertex_shader = gl_tut::GL_shader::from_file(
-            GL_VERTEX_SHADER,
-            "../src/vertex_shader.vert"
-        );
-        auto fragment_shader = gl_tut::GL_shader::from_file(
-            GL_FRAGMENT_SHADER,
-            "../src/fragment_shader.frag"
-        );
+        std::vector< gl_tut::render_step* > render_steps = {
+            new scene_render_step(),
+            new postprocess_render_step()
+        };
         
-        gl_tut::GL_shader_program shader_program( {
-            vertex_shader.id,
-            fragment_shader.id
-        } );
-        shader_program.use();
-        
-        auto tutorial = tutorial_manager( shader_program, argc, argv );
+        gl_tut::GL_framebuffer preprocessing_framebuffer(
+            window_width,
+            window_height
+        );
         
         auto start_time = std::chrono::high_resolution_clock::now();
         auto previous_time = start_time;
@@ -774,39 +992,28 @@ int main( int argc, char* argv[] )
                     break;
             }
             
-            auto current_time = std::chrono::high_resolution_clock::now();
-            
-            shader_program.try_set_uniform(
-                "time_absolute",
-                std::chrono::duration_cast<
-                    std::chrono::duration< float >
-                >( current_time - start_time ).count()
-            );
-            shader_program.try_set_uniform(
-                "time_delta",
-                std::chrono::duration_cast<
-                    std::chrono::duration< float >
-                >( current_time - previous_time ).count()
-            );
-            
-            glClear(
-                  GL_COLOR_BUFFER_BIT
-                | GL_DEPTH_BUFFER_BIT
-                | GL_STENCIL_BUFFER_BIT
-            );
-            
-            shader_program.use();
-            
-            tutorial.update(
-                shader_program,
-                start_time,
-                current_time
-            );
+            auto step_iter = render_steps.begin();
+            while( step_iter != render_steps.end() )
+            {
+                auto step = *step_iter;
+                
+                if( ++step_iter == render_steps.end() )
+                    // Bind default framebuffer
+                    glBindFramebuffer( GL_FRAMEBUFFER, 0 );
+                else
+                    glBindFramebuffer(
+                        GL_FRAMEBUFFER,
+                        preprocessing_framebuffer.id
+                    );
+                
+                step -> run( preprocessing_framebuffer );
+            }
             
             SDL_GL_SwapWindow( window.sdl_window );
-            
-            previous_time = current_time;
         }
+        
+        for( auto step : render_steps )
+            delete step;
         
         return 0;
     }

@@ -54,14 +54,22 @@ void main()
     // //     1.0
     // // );
     
-    // float offset = radians( 120.0 );
-    // color_out *= vec4(
-    //     ( sin( time_absolute + 0 * offset ) + 1.0 ) / 2.0,
-    //     ( sin( time_absolute + 1 * offset ) + 1.0 ) / 2.0,
-    //     ( sin( time_absolute + 2 * offset ) + 1.0 ) / 2.0,
-    //     1.0
-    // );
+    float offset = radians( 120.0 );
+    color_out *= vec4(
+        ( sin( time_absolute + 0 * offset ) + 1.0 ) / 2.0,
+        ( sin( time_absolute + 1 * offset ) + 1.0 ) / 2.0,
+        ( sin( time_absolute + 2 * offset ) + 1.0 ) / 2.0,
+        1.0
+    );
     
     color_out *= vec4( color, 1.0 );
     color_out *= vec4( tint,  1.0 );
+    
+    // // Depth buffer:
+    // color_out = vec4(
+    //     gl_FragCoord.z /* / gl_FragCoord.w */,
+    //     gl_FragCoord.z /* / gl_FragCoord.w */,
+    //     gl_FragCoord.z /* / gl_FragCoord.w */,
+    //     1.0f
+    // );
 }
