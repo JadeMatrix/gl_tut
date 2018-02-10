@@ -204,9 +204,17 @@ namespace gl_tut
             for( auto& shader_id : shaders )
                 glAttachShader( id, shader_id );
             
-            // Note: use glDrawBuffers when rendering to multiple buffers,
-            // because only the first output will be enabled by default.
-            glBindFragDataLocation( id, 0, "color_out" );
+            // // Note: use glDrawBuffers when rendering to multiple buffers,
+            // // because only the first output will be enabled by default.
+            // glBindFragDataLocation( id, 0, "color_out" );
+            
+            const GLchar* feedback_varyings[] = { "value_out" };
+            glTransformFeedbackVaryings(
+                id,
+                1,                      // Number of varyings
+                feedback_varyings,      // Varying outputs array
+                GL_INTERLEAVED_ATTRIBS  // How data should be written (vs. GL_SEPARATE_ATTRIBS)
+            );
             
             glLinkProgram( id );
         }
@@ -306,22 +314,6 @@ namespace gl_tut
             );
     }
     
-    // template<> void GL_shader_program::set_uniform< unsigned int >(
-    //     const std::string& uniform_name,
-    //     const unsigned int& value
-    // )
-    // {
-    //     auto uniform_id = uniform( uniform_name );
-    //     glUniform1ui( uniform_id, value );
-    //     if( glGetError() != GL_NO_ERROR )
-    //         throw wrong_variable_type(
-    //             "unable to set unsigned integer uniform \""
-    //             + uniform_name
-    //             + "\" of program "
-    //             + std::to_string( id )
-    //         );
-    // }
-    
     template<> void GL_shader_program::set_uniform< glm::mat4 >(
         const std::string& uniform_name,
         const glm::mat4& value
@@ -362,70 +354,6 @@ namespace gl_tut
                 + "\" of program "
                 + std::to_string( id )
             );
-    }
-    
-    bool load_bound_texture( std::string filename )
-    {
-        SDL_Surface* sdl_surface = IMG_Load(
-            filename.c_str()
-        );
-        if( !sdl_surface )
-            throw std::runtime_error(
-                "failed to load texture \""
-                + filename
-                + "\": "
-                + IMG_GetError()
-            );
-        // else
-        //     std::cout
-        //         << "loaded texture \""
-        //         << filename
-        //         << "\": w="
-        //         << sdl_surface -> w
-        //         << " h="
-        //         << sdl_surface -> h
-        //         << " bpp="
-        //         << ( int )( sdl_surface -> format -> BytesPerPixel )
-        //         << std::endl
-        //     ;
-        
-        GLenum texture_mode = (
-            sdl_surface -> format -> BytesPerPixel == 4 ?
-            GL_RGBA : GL_RGB
-        );
-        glTexImage2D(   // Loads starting at 0,0 as bottom left
-            GL_TEXTURE_2D,
-            0,                      // LoD, 0 = base
-            texture_mode,           // Internal format
-            sdl_surface -> w,       // Width
-            sdl_surface -> h,       // Height
-            0,                      // Border; must be 0
-            texture_mode,           // Incoming format
-            GL_UNSIGNED_BYTE,       // Pixel type
-            sdl_surface -> pixels   // Pixel data
-        );
-        SDL_FreeSurface( sdl_surface );
-        
-        // glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER );
-        // glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER );
-        // float texture_border_color[] = { 1.0f, 0.0f, 0.0f };
-        // glTexParameterfv(
-        //     GL_TEXTURE_2D,
-        //     GL_TEXTURE_BORDER_COLOR,
-        //     texture_border_color
-        // );
-        
-        glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
-        glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
-        // glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
-        // glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
-        
-        glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR );
-        // glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
-        glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
-        glGenerateMipmap( GL_TEXTURE_2D );
-        
-        return true;
     }
     
     class GL_framebuffer
@@ -517,227 +445,125 @@ namespace
     const int window_width  = 800;
     const int window_height = 600;
     
-    class scene_render_step : public gl_tut::render_step
+    class feedback_render_step : public gl_tut::render_step
     {
     public:
         gl_tut::GL_shader_program* shader_program;
-        GLuint triangle_vbo;
+        GLuint data_vbo;
+        GLuint result_vbo;
+        GLuint query;
         
-        scene_render_step()
+        feedback_render_step()
         {
-            auto vertex_shader = gl_tut::GL_shader::from_file(
+            auto shader = gl_tut::GL_shader::from_file(
                 GL_VERTEX_SHADER,
-                "../src/vertex_shader.vert"
-            );
-            auto geometry_shader = gl_tut::GL_shader::from_file(
-                GL_GEOMETRY_SHADER,
-                "../src/geometry_shader.geom"
-            );
-            auto fragment_shader = gl_tut::GL_shader::from_file(
-                GL_FRAGMENT_SHADER,
-                "../src/fragment_shader.frag"
+                "../src/feedback.vert"
             );
             
             shader_program = new gl_tut::GL_shader_program( {
-                vertex_shader.id,
-                geometry_shader.id,
-                fragment_shader.id
+                shader.id
             } );
             shader_program -> use();
             
-            
-            // Create shader input data ////////////////////////////////////////
-            
-            float vertices[] = {
-            //  Position -------------| Color ----------| Texture --| Sides
-            //       X,      Y,      Z,    R,    G,    B,    U,    V,    N
-                -0.45f,  0.45f,         1.0f, 0.0f, 0.0f,             4.0f,
-                 0.45f,  0.45f,         0.0f, 1.0f, 0.0f,             8.0f,
-                 0.45f, -0.45f,         0.0f, 0.0f, 1.0f,            16.0f,
-                -0.45f, -0.45f,         1.0f, 1.0f, 0.0f,            32.0f
-            };
-            glGenBuffers( 1, &triangle_vbo );
-            glBindBuffer( GL_ARRAY_BUFFER, triangle_vbo );
+            float data[] = { 1.0f, 2.0f, 3.0f, 4.0f, 5.0f };
+            glGenBuffers( 1, &data_vbo );
+            glBindBuffer( GL_ARRAY_BUFFER, data_vbo );
             glBufferData(
                GL_ARRAY_BUFFER,
-               sizeof( vertices ),
-               vertices,
+               sizeof( data ),
+               data,
                GL_STATIC_DRAW
             );
             
-            
-            // Configure shader program attributes /////////////////////////////
-            
-            GLint position_attr = shader_program -> attribute( "position" );
-            glEnableVertexAttribArray( position_attr );
+            GLint data_attr = shader_program -> attribute( "value_in" );
+            glEnableVertexAttribArray( data_attr );
             glVertexAttribPointer(
-                position_attr,       // Data source
-                2,                   // Components per element
-                GL_FLOAT,            // Component type
-                GL_FALSE,            // Components should be normalized
-                6 * sizeof( float ), // Component stride in bytes (0 = packed)
-                NULL                 // Component offset within stride
-            );
-            
-            GLint color_attr = shader_program -> attribute( "color_in" );
-            glEnableVertexAttribArray( color_attr );
-            glVertexAttribPointer(
-                color_attr,          // Data source
-                3,                   // Components per element
-                GL_FLOAT,            // Component type
-                GL_FALSE,            // Components should be normalized
-                6 * sizeof( float ), // Component stride in bytes (0 = packed)
-                ( void* )( 2 * sizeof( float ) )
-                                     // Component offset within stride
-            );
-            
-            GLint sides_attr = shader_program -> attribute( "sides" );
-            glEnableVertexAttribArray( sides_attr );
-            glVertexAttribPointer(
-                sides_attr,          // Data source
+                data_attr,           // Data source
                 1,                   // Components per element
                 GL_FLOAT,            // Component type
                 GL_FALSE,            // Components should be normalized
-                6 * sizeof( float ), // Component stride in bytes (0 = packed)
-                ( void* )( 5 * sizeof( float ) )
+                1 * sizeof( float ), // Component stride in bytes (0 = packed)
+                ( void* )( 0 * sizeof( float ) )
                                      // Component offset within stride
             );
-        }
-        
-        ~scene_render_step()
-        {
-            glDeleteBuffers( 1, &triangle_vbo );
-            delete shader_program;
-        }
-        
-        void run( gl_tut::GL_framebuffer& previous_framebuffer )
-        {
-            shader_program -> use();
             
-            glEnable( GL_DEPTH_TEST );
-            glClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
-            glClear(
-                  GL_COLOR_BUFFER_BIT
-                | GL_DEPTH_BUFFER_BIT
-                | GL_STENCIL_BUFFER_BIT
-            );
-            
-            glDrawArrays(
-                GL_POINTS,  // Type of primitive
-                0,          // Starting at element
-                4           // Number of elements
-            );
-        }
-    };
-    
-    class postprocess_render_step : public gl_tut::render_step
-    {
-    public:
-        gl_tut::GL_shader_program* shader_program;
-        GLuint triangle_vbo;
-        GLuint triangle_ebo;
-        
-        postprocess_render_step()
-        {
-            auto vertex_shader = gl_tut::GL_shader::from_file(
-                GL_VERTEX_SHADER,
-                "../src/postprocess.vert"
-            );
-            auto fragment_shader = gl_tut::GL_shader::from_file(
-                GL_FRAGMENT_SHADER,
-                "../src/postprocess.frag"
-            );
-            
-            shader_program = new gl_tut::GL_shader_program( {
-                vertex_shader.id,
-                fragment_shader.id
-            } );
-            shader_program -> use();
-            
-            float triangle_vertices[] = {
-            //      X,     Y,    S,    T
-                -1.0f,  1.0f, 0.0f, 0.0f, //    top left
-                 1.0f,  1.0f, 1.0f, 0.0f, //    top right
-                 1.0f, -1.0f, 1.0f, 1.0f, // bottom right
-                -1.0f, -1.0f, 0.0f, 1.0f  // bottom left
-            };
-            glGenBuffers( 1, &triangle_vbo );
-            glBindBuffer( GL_ARRAY_BUFFER, triangle_vbo );
+            glGenBuffers( 1, &result_vbo );
+            glBindBuffer( GL_ARRAY_BUFFER, result_vbo );
             glBufferData(
                GL_ARRAY_BUFFER,
-               sizeof( triangle_vertices ),
-               triangle_vertices,
-               GL_STATIC_DRAW // GL_DYNAMIC_DRAW, GL_STREAM_DRAW
+               sizeof( data ),
+               nullptr,
+               GL_STATIC_READ
             );
             
-            GLuint triangle_elements[] = {
-                0, 1, 2,
-                2, 3, 0
-            };
-            glGenBuffers( 1, &triangle_ebo );
-            glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, triangle_ebo );
-            glBufferData(
-                GL_ELEMENT_ARRAY_BUFFER,
-                sizeof( triangle_elements ),
-                triangle_elements,
-                GL_STATIC_DRAW
-            );
-            
-            GLint position_attr = shader_program -> attribute( "position" );
-            glEnableVertexAttribArray( position_attr );
-            glVertexAttribPointer(
-                position_attr,       // Data source
-                2,                   // Components per element
-                GL_FLOAT,            // Component type
-                GL_FALSE,            // Components should be normalized
-                4 * sizeof( float ), // Component stride in bytes (0 = packed)
-                NULL                 // Component offset within stride
-            );
-            
-            GLint texture_coord_attr = shader_program -> attribute(
-                "texture_coord_in"
-            );
-            glEnableVertexAttribArray( texture_coord_attr );
-            glVertexAttribPointer(
-                texture_coord_attr,  // Data source
-                2,                   // Components per element
-                GL_FLOAT,            // Component type
-                GL_FALSE,            // Components should be normalized
-                4 * sizeof( float ), // Component stride in bytes (0 = packed)
-                ( void* )( 2 * sizeof( float ) )
-                                     // Component offset within stride
-            );
+            glGenQueries( 1, &query );
         }
         
-        ~postprocess_render_step()
+        ~feedback_render_step()
         {
+            glDeleteQueries( 1, &query );
+            glDeleteBuffers( 1, &result_vbo );
+            glDeleteBuffers( 1, &data_vbo );
             delete shader_program;
-            glDeleteBuffers( 1, &triangle_vbo );
         }
         
         void run( gl_tut::GL_framebuffer& previous_framebuffer )
         {
-            glClear(
-                  GL_COLOR_BUFFER_BIT
-                | GL_DEPTH_BUFFER_BIT
-                | GL_STENCIL_BUFFER_BIT
+            glEnable( GL_RASTERIZER_DISCARD );
+            
+            glBindBufferBase(
+                GL_TRANSFORM_FEEDBACK_BUFFER,
+                0,          // Index of output variable
+                result_vbo  // Buffer object to bind
             );
             
-            glDisable( GL_DEPTH_TEST );
-            shader_program -> use();
-            
-            glActiveTexture( GL_TEXTURE0 );
-            glBindTexture( GL_TEXTURE_2D, previous_framebuffer.color_buffer );
-            shader_program -> set_uniform( "framebuffer", 0 );
-            
-            glBindVertexArray( triangle_vbo );
-            
-            glDrawElements(
-                GL_TRIANGLES,       // Type of primitive
-                6,                  // Number of elements
-                GL_UNSIGNED_INT,    // Type of element
-                0                   // Starting at element
+            glBeginQuery(
+                GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN,
+                    // GL_PRIMITIVES_GENERATED, GL_TIME_ELAPSED
+                query
             );
+            // Must match output of geom shader when using one
+            glBeginTransformFeedback( GL_POINTS );
+            glDrawArrays( GL_POINTS, 0, 5 );
+            glEndTransformFeedback();
+            glEndQuery( GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN );
+            
+            glFlush();
+            
+            GLuint count_primitives;
+            glGetQueryObjectuiv(
+                query,
+                GL_QUERY_RESULT,
+                &count_primitives
+            );
+            
+            float* feedback = new float[ count_primitives ];
+            glGetBufferSubData(
+                GL_TRANSFORM_FEEDBACK_BUFFER,
+                0,
+                (
+                    count_primitives    // Number primitives generated
+                    * 1                 // Number of floats per primitive
+                    * sizeof( float )
+                ),
+                feedback
+            );
+            std::cout
+                << "got "
+                << count_primitives
+                << " results:"
+                << std::endl
+            ;
+            for( int i = 0; i < count_primitives; ++i )
+                std::cout
+                    << "  "
+                    << feedback[ i ]
+                    << std::endl
+                ;
+            delete[] feedback;
+            throw std::runtime_error( "done" );
+            
+            glDisable( GL_RASTERIZER_DISCARD );
         }
     };
 }
@@ -769,8 +595,7 @@ int main( int argc, char* argv[] )
     #endif
         
         std::vector< gl_tut::render_step* > render_steps = {
-            new scene_render_step()/*,
-            new postprocess_render_step()*/
+            new feedback_render_step()
         };
         
         gl_tut::GL_framebuffer preprocessing_framebuffer(
